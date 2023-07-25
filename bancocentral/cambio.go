@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// TODO: Implement tests
 type Cambio struct {
 	queryURL string
 	acesso   *AcessarBancoCentral
