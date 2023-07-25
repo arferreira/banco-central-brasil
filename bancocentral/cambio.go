@@ -2,6 +2,8 @@ package bancocentral
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,18 +27,21 @@ func NewCambio() *Cambio {
 		err:      nil,
 	}
 
+	// Realize a solicitação HTTP e capture a resposta e o erro
 	c.req, c.err = c.acesso.GetURL()
 	if c.err != nil {
+		// Se houver um erro, retorne a instância de `Cambio` com o erro
 		return c
 	}
 
+	// Se a solicitação for bem-sucedida, atualize o campo `cambio` com o conteúdo limpo
 	c.cambio = cleanContent(string(c.req))
 
 	return c
 }
 
 func (c *Cambio) GetDolarCompraPtax() (float64, error) {
-	data := regexp.MustCompile(`INDICADOR_CAMBIO_DOLAR_PTAX(.*?)</entry>`).FindStringSubmatch(c.cambio)
+	data := regexp.MustCompile(`<entry>.*?<id>painel_indicadores_INDICADOR_CAMBIO_DOLAR_PTAX</id>(.*?)</entry>`).FindStringSubmatch(c.cambio)
 	if data == nil {
 		return 0, errors.New("atributo não encontrado")
 	}
@@ -55,14 +60,14 @@ func (c *Cambio) GetDolarCompraPtax() (float64, error) {
 }
 
 func (c *Cambio) GetDolarVendaPtax() (float64, error) {
-	data := regexp.MustCompile(`INDICADOR_CAMBIO_DOLAR_PTAX(.*?)</entry>`).FindStringSubmatch(c.cambio)
+	data := regexp.MustCompile(`<entry>.*?<id>painel_indicadores_INDICADOR_CAMBIO_DOLAR_PTAX</id>(.*?)</entry>`).FindStringSubmatch(c.cambio)
 	if data == nil {
-		return 0, errors.New("atributo não encontrado")
+		return 0, errors.New("atributo INDICADOR_CAMBIO_DOLAR_PTAX não encontrado")
 	}
 
 	venda := regexp.MustCompile(`<div id=rate><div id=label>Venda</div><div id=value>(\d*[\.,]?\d+)</div>`).FindStringSubmatch(data[1])
 	if venda == nil {
-		return 0, errors.New("atributo não encontrado")
+		return 0, errors.New("atributo Venda não encontrado")
 	}
 
 	dolarVendaPtax, err := strconv.ParseFloat(strings.ReplaceAll(venda[1], ",", "."), 64)
@@ -74,17 +79,27 @@ func (c *Cambio) GetDolarVendaPtax() (float64, error) {
 }
 
 func (c *Cambio) GetDataDolarPtax() (string, error) {
-	data := regexp.MustCompile(`INDICADOR_CAMBIO_DOLAR_PTAX(.*?)</entry>`).FindStringSubmatch(c.cambio)
+	data := regexp.MustCompile(`<entry>.*?<id>painel_indicadores_INDICADOR_CAMBIO_DOLAR_PTAX</id>(.*?)</entry>`).FindStringSubmatch(c.cambio)
 	if data == nil {
-		return "", errors.New("atributo não encontrado")
+		return "", errors.New("atributo INDICADOR_CAMBIO_DOLAR_PTAX não encontrado")
 	}
 
-	search := regexp.MustCompile(`<div id=data>[a-zA-Z\s]*([\d/]+\s[\d:]+)</div>`).FindStringSubmatch(data[1])
-	if search == nil {
-		return "", errors.New("atributo não encontrado")
+	log.Println("data: ", data)
+
+	rate := regexp.MustCompile(`<div id=rate>.*?<div id=value>(\d*[\.,]?\d+)</div>`).FindStringSubmatch(data[1])
+	if rate == nil {
+		return "", errors.New("valor de PTAX não encontrado")
 	}
 
-	return search[1], nil
+	log.Println("rate", rate)
+
+	dataDolar := regexp.MustCompile(`<div id=data>([\d/]+\s[\d:]+)`).FindStringSubmatch(data[1])
+	if dataDolar == nil {
+		return "", errors.New("data de PTAX não encontrada")
+	}
+
+	ptaxValue := strings.ReplaceAll(rate[1], ",", ".")
+	return fmt.Sprintf("%s %s", ptaxValue, dataDolar[1]), nil
 }
 
 func (c *Cambio) GetDolarCompra() (float64, error) {
